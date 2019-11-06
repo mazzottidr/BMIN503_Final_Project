@@ -1,7 +1,6 @@
 ---
 title: "Sleep complaints in social media"
 author: "Diego R. Mazzotti"
-date: "11/6/2019"
 output: 
   html_document:
     toc: false 
@@ -9,19 +8,20 @@ output:
     theme: paper 
     highlight: tango
 ---
+```{r set-options, echo=FALSE, cache=FALSE}
+options(width = 400)
+```  
+***
+## Identification of sleep complaints using social media: geographic distribution and effect of changes from daylight savings time to standard time
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
-```
-
-### Identification of sleep complaints using social media: geographic distribution and effect of changes from daylight savings time to standard time
-
-#### Overview
-
+### Overview
 This study will extract data from Twitter to identify tweets mentioning sleep complaints. We will use the results from a simple machine learning classifier, using manually annotated tweets according to their status of whether the tweet reports a sleep complaint, to classify geotagged tweets posted in the United States. We will then calculate the prevalence of sleep complaints in different geographic regions, including at different latitudes and distances from time zone boundaries to evaluate whether these factors are associated with differences in prevalence of sleep complaints.
 
-#### Introduction
+I have spoken to the following faculty members that were instrumental to the appropriate design of this study:  Dr. Graciela Gonzalez-Hernandez (Associate Professor of Informatics, Division of Informatics, Department of Epidemiology, Biostatistics, and Informatics), Dr. Philip Gehrman (Associate Professor of Clinical Psychology in Psychiatry, Department of Psychiatry) and Dr. Allan Pack (John Miclot Professor, Division of Sleep Medicine, Department of Medicine).
 
+The final project is available in [this repository](https://github.com/mazzottidr/BMIN503_Final_Project).
+
+### Introduction 
 Sleep disorders affect a large proportion of the population in the United States and worldwide, and it has been associated with several health consequences. Sleep complaints are a manifestation of an acute or chronic state of sleep disturbances and can be captured by a number of validated questionnaires and objective instruments. Social media platforms have been recently considered as another powerful source of data about human behavior. For example, recent studies have explored data generated from Twitter, a micro-blogging social medial platform, and successfully captured information about drug exposures, suggesting that it could be a relevant pharmacovigilance tool. Because of the importance of good sleep habits for maintenance of health, we hypothesize that sleep-related behaviors, such as sleep complaints, can be captured using social media data mining and natural language processing tools to support digital epidemiology of sleep disorders.
 
 In this study, I will utilize tools that I was exposed during the Data Science for Biomedical Informatics course to design a proof-of-concept study of the ability to capture sleep-complaints from Twitter data. In collaboration with other faculty members at the University of Pennsylvania (Dr. Graciela Gonzalez-Hernandez, Dr. Philip Gehrman and Dr. Allan Pack), we are collecting data from Twitter in two separate experiments:
@@ -31,8 +31,9 @@ In this study, I will utilize tools that I was exposed during the Data Science f
 2. Geotagged tweets posted within the boundaries of the United States, to evaluate the geographic and circadian distribution of tweets mentioning sleep complaints (using the model above), as well as the effect of the transition between daylight savings time and standard time on the these distributions.
 
 This study is interdisciplinary because it uses concepts from sleep medicine, circadian biology, epidemiology and biomedical informatics. The successful completion of this study might reveal which regions of the United States are more likely to report sleep complaints in a social media platform. We hypothesize that there will be an effect of the latitude and distance from time zone boundaries on the prevalence of sleep complaints.
- 
-#### Methods
+
+
+### Methods
 
 Data is currently being collected in parallel for experiments 1 and 2. Data from experiment 1 is being collected by Dr. Graciela Gonzalez-Hernandez using her team's scripts. Data for experiment 2 is being collected using the `rtweet` package. Data collection started on 10/30/2019 and will end after two weeks, on 11/13/2019. The transition from daylight savings time to standard time happened on 11/03/2016. Data is being collected using the following code:
 
@@ -65,7 +66,11 @@ stream_tweets(lookup_coords("usa"), timeout = 60*60*24*14, parse = F, gzip=T, la
 
 Additional methods will be available upon completion of data collection.
 
+> From template: In the first paragraph, describe the data used and general methodological approach. Subsequently, incorporate full R code necessary to retrieve and clean data, and perform analysis. Be sure to include a description of code so that others (including your future self) can understand what you are doing and why. 
 
-#### Results
+
+### Results
 
 Results will be available upon completion of data collection.
+
+> From template: Describe your results and include relevant tables, plots, and code/comments used to obtain them. End with a brief conclusion of your findings related to the question you set out to address. You can include references if you'd like, but this is not required.
