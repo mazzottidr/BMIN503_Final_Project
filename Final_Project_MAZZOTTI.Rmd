@@ -211,6 +211,6 @@ Distribution of insomnia/sleep complaints tweets according to distance from time
 
 During the collection period, there were 20,566,878 tweets sucessfuly extracted using the Twitter API
 
-Results will be available upon completion of data collection.
+Additional results will be available later.
 
 > From template: Describe your results and include relevant tables, plots, and code/comments used to obtain them. End with a brief conclusion of your findings related to the question you set out to address. You can include references if you'd like, but this is not required.

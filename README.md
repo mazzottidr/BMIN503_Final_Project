@@ -12,7 +12,27 @@ Follow the instructions [here][forking] if you are unsure what the above steps m
 
 DUE DATE FOR FINAL VERSION: 12/13/19 11:59PM. This is a hard deadline. Turn in whatever you have by this date.
 
-### Rmarkdown file is available in `Final_Project_MAZZOTTI.Rmd`
+
+### Identification of sleep complaints using social media: geographic distribution and effect of changes from daylight savings time to standard time
+
+Author: Diego R. Mazzotti, Ph.D.
+Final Project for Data Science for Biomedical Informatics BMIN503/EPID600
+
+This study will extract data from Twitter to identify tweets mentioning sleep complaints. We will use the results of a simple machine learning classifier, using manually annotated tweets according to their status of whether the tweet reports a sleep complaint, to classify geotagged tweets posted in the United States. We will then calculate the prevalence of sleep complaints in different geographic regions, including at different latitudes and distances from time zone boundaries to evaluate whether these factors are associated with differences in prevalence of sleep complaints.
+
+#### Available files
+
+- `Final_Project_MAZZOTTI.Rmd` and `Final_Project_MAZZOTTI.html`: Main Rmarkdown file where the detailed report is presented, including code, results and plots.
+
+- `stream_USA_tweets_2w.R`: Script to collect Twitter data based on the Twitter API. API keys and tokens were removed from this file for security reasons.
+
+- `post_process_tweets.R`: Script to load tweets in `.json` and parse them into R.
+
+- `load__getTZ_calcTime.R`:  Script to format, adjust the time of posting to the corresponding time zone and correct for daylight savings time (DST)
+
+
+
+
 
 <!-- Links -->
 [forking]: https://guides.github.com/activities/forking/
