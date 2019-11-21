@@ -35,9 +35,20 @@ This study is interdisciplinary because it uses concepts from sleep medicine, ci
 
 ### Methods
 
-Data is currently being collected in parallel for experiments 1 and 2. Data from experiment 1 is being collected by Dr. Graciela Gonzalez-Hernandez using her team's scripts. Data for experiment 2 is being collected using the `rtweet` package. Data collection started on 10/30/2019 and will end after two weeks, on 11/13/2019. The transition from daylight savings time to standard time happened on 11/03/2016. Data is being collected using the following code:
+Data is currently being collected in parallel for experiments 1 and 2. Data from Experiment 1 is being collected by Dr. Graciela Gonzalez-Hernandez using her team's optmized scripts. Data for Experiment 2 was collected using the `rtweet` package. Data collection started on `Wed Oct 30 13:37:51 +0000 2019` and finished on `Wed Nov 13 14:42:05 +0000 2019` The transition from daylight savings time to standard time happened on Sunday, Nov 3rd 2019 at 2:00 AM. The code used to collect data for this experiment is represented below. Collection was restricted only for tweets tagged with geolocation coordinates within the United States (see `lookup_coords("usa")` below). Because data collection required authentication via the Twitter API, and lasted aproximately two weeks, the code below is for illustration purposes. Data was collected using one of PMACS servers (`sarlacc.pmacs.upenn.edu`) using the command below in an UNIX terminal:
+
+```{bash eval=FALSE}
+# This is a bash command
+nohup Rscript stream_USA_tweets_2w.R >log103019.log
+```
+
+Where the file `stream_USA_tweets_2w.R` is illustrated below:
 
 ```{r eval=FALSE}
+# Collect tweets form Twitter API through the live stream API
+# Diego Mazzotti
+# November 2019
+
 ## Load packages
 library(rtweet)
 
@@ -55,8 +66,8 @@ token <- create_token(
         access_token = access_token,
         access_secret = access_token_secret)
 
+# Create a numeric timestamp and paste to final file name
 t <- gsub(" ", "", gsub(":", "", gsub("-", "", Sys.time())))
-
 fname <- paste0("USA_tweets_", t, ".json")
 
 # Stream tweets in the USA for 2 weeks
@@ -64,12 +75,141 @@ stream_tweets(lookup_coords("usa"), timeout = 60*60*24*14, parse = F, gzip=T, la
 
 ```
 
-Additional methods will be available upon completion of data collection.
+Aftar data was collected, the file `USA_tweets_20191030093755.json` was created, containing a random sample of the tweets that were posted during the collection period, according to the [Twitter API](https://developer.twitter.com/en/docs). The resulting file is an unparsed output of the `rtweet` package (see `parse = F` above), and this output format was prefered to avoid additional issues loading this large data file into R. To facilitate post-processing of this large output, the file was split in smaller files containing aproximately 500,000 rows, using the following command in an UNIX terminal: 
+
+```{bash eval=FALSE}
+# This is a bash command
+split -l 500000 USA_tweets_20191030093755.json segment
+```
+
+The command above created 38 files with the prefix `segment` containing consecutive parts of the file `USA_tweets_20191030093755.json`. Each split file was then loaded into R for additional processing, including selecting only relevant variables, calculating the latitute and longitude and filtering out re-tweets (only original tweets are being counted in this analysis). The command below was used to run the R script `post_process_tweets.R` in `sarlacc.pmacs.upenn.edu`:
+
+```{bash eval=FALSE}
+ # This is a bash command
+ nohup Rscript post_process_tweets.R > post_20112019.log
+```
+
+The R script`post_process_tweets.R` is represented below:
+
+````{r eval=FALSE}
+# Processing tweets after collection
+# This script is design to process tweets in smaller chunks
+# Diego Mazzotti
+# November 2019
+
+# Load necessary packages
+library(rtweet)
+library(dplyr)
+
+# Get list of files to process
+files_to_process <- dir(path = ".", pattern = "^segment*.[^Rdata]$")
+
+# For each file in list, load, extract relevant information, process coordinates and save as Rdata object
+i=1
+for (f in files_to_process) {
+        
+        # If corresponding file already processed, skip
+        if (file.exists(paste0(f, ".parsed_short.Rdata"))) {
+                
+                i=i+1
+                next()
+                
+                }
+        
+        # Create counter to evaluate progression
+        message(paste0("Processing: ", f))
+        message(paste0((i/length(files_to_process))*100), " %")
+        
+        # Parse json tweets into R
+        parsed <- parse_stream(f)
+        
+        # Select only columns that are relevant for this study
+        parsed_short <- parsed %>%
+                select(user_id, created_at,text, retweet_count, favorite_count, is_retweet, place_url, place_name, place_full_name, place_type, country,
+                       country_code, bbox_coords) %>%
+                lat_lng() %>% # Calculate latitude and longitude based on geocoordinates available in each tweet
+                filter(!is_retweet) # Filter out re-tweets
+        
+        # Save in Rdata format
+        saveRDS(parsed_short, paste0(f, ".parsed_short.Rdata"))
+        
+        i=i+1
+        
+        message("Done!")
+}
+```
+
+The result of running the script above was the creation of 38 `*.Rdata` files representing the processed tweets. The script below (`load__getTZ_calTime.R`) was then run in `sarlacc.pmacs.upenn.edu` to combine all `.Rdata` files into one data frame, to create an additional variable representing the timezone that the tweet was posted, and calculating an adjusted posting time variable, taking into account the local time the tweet was posted (considering time zone and daylight savings time)
+
+
+```{r eval=F}
+# Load all tweets and create one data frame, get time zone and calculate local time of the tweet, according to time zone
+library(dplyr)
+library(lutz)
+library(lubridate)
+
+# Get all files to process based on regular expressions
+files_to_process <- dir(path = ".", pattern = "^segment*.+Rdata")
+
+# Load each file as a list
+tweet_list <-  list()
+for (f in files_to_process) {
+        
+        message(paste0("Processing: ", f))
+        
+        tweet_list[[f]] <- readRDS(f)
+        
+}
+
+# Convert to data frame
+tweet_df <-  bind_rows(tweet_list)
+
+rm(tweet_list) # Remove list to save memory
+
+
+# Find which timezones have DST changes and calculate local time
+tweet_df_final <- tweet_df %>%
+        # Find timezones. Caveat: "fast" might be less accurate
+        mutate(Timezone=tz_lookup_coords(lat, lng, method = "fast")) %>%
+        # Select only relevant columns
+        select(user_id, created_at, text, place_url, place_name, place_full_name, place_type, country,
+               country_code, lat, lng, coords_coords, Timezone) %>%
+        # remove tweets that were not mapped to any Timezone (is.na(Timezone)) - only small number of tweets - N=185
+        filter(!is.na(Timezone)) %>%
+        
+        # Convert created_at UTC to corresponding time zone and extract the offset given considering daylight savings time (DST)
+        rowwise() %>%
+        mutate(created_at_TZadj=force_tz(created_at, Timezone),
+               tz_offset=tz_offset(created_at_TZadj, tz =Timezone)$utc_offset_h) %>%
+        as.data.frame() %>%
+        # Calculate final Local Time, taking into account DST
+        mutate(LocalTime=created_at + hours(tz_offset))
+        
+# Save dataset (N tweets = 4699612)
+saveRDS(tweet_df_final, "Processed_Tweets_11202019.Rdata")
+
+```
+
+
+
+Additional methods will be available.
+
+Details on data collection - Experiment 1
+
+Classification of insomnia/sleep complaints tweets using machine learning
+
+Distribution of insomnia/sleep complaints tweets according to longitude and latitude
+
+Distribution of insomnia/sleep complaints tweets according to distance from time-zone boundaries
+
+
 
 > From template: In the first paragraph, describe the data used and general methodological approach. Subsequently, incorporate full R code necessary to retrieve and clean data, and perform analysis. Be sure to include a description of code so that others (including your future self) can understand what you are doing and why. 
 
 
 ### Results
+
+During the collection period, there were 20,566,878 tweets sucessfuly extracted using the Twitter API
 
 Results will be available upon completion of data collection.
 
