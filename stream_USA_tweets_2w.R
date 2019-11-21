@@ -2,10 +2,10 @@
 library(rtweet)
 
 ## store api keys (these are fake example values; replace with your own keys)
-api_key <- "2fS8eVCg0SL8OfVYKDSuYEOh8"
-api_secret_key <- "9qfoKeeJOwKLACh6baNsqCsEwONL2kerNg4mn3DHh4NmYw8CiG"
-access_token <- "1588255170-lHkE95h7u7oxqIcX8L33XPNCP9n5Z3w9jniO7Jg"
-access_token_secret <- "VOeq0PLg4Ak4nacTqPJ4vHwKXxJIIbC529wwNVRV43HuH"
+api_key <- ""
+api_secret_key <- ""
+access_token <- ""
+access_token_secret <- ""
 
 ## authenticate via web browser
 token <- create_token(
