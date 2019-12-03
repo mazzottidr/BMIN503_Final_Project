@@ -30,6 +30,10 @@ This study extracted data from Twitter to identify tweets mentioning sleep compl
 
 - `load__getTZ_calcTime.R`:  Script to format, adjust the time of posting to the corresponding time zone and correct for daylight savings time (DST)
 
+- `ManualAnnotation_22112019_500.csv`: File containing manual annotations of each tweet (up to first 500 tweets)
+
+- `FINAL_PROJECT_Mazzotti.pptx`: Final project PowerPoint presentation
+
 
 
 
