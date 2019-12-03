@@ -8,34 +8,344 @@ output:
     theme: paper 
     highlight: tango
 ---
-```{r set-options, echo=FALSE, cache=FALSE}
+```{r set-options, echo=F, warning=FALSE, cache=FALSE}
+
+# Set options
 options(width = 400)
+
 ```  
 ***
 ## Identification of sleep complaints using social media: geographic distribution and effect of changes from daylight savings time to standard time
 
-### Overview
-This study will extract data from Twitter to identify tweets mentioning sleep complaints. We will use the results of a simple machine learning classifier, using manually annotated tweets according to their status of whether the tweet reports a sleep complaint, to classify geotagged tweets posted in the United States. We will then calculate the prevalence of sleep complaints in different geographic regions, including at different latitudes and distances from time zone boundaries to evaluate whether these factors are associated with differences in prevalence of sleep complaints.
+```{r message=FALSE, warning=FALSE}
 
-I have spoken to the following faculty members that were instrumental to the appropriate design of this study:  Dr. Graciela Gonzalez-Hernandez (Associate Professor of Informatics, Division of Informatics, Department of Epidemiology, Biostatistics, and Informatics), Dr. Philip Gehrman (Associate Professor of Clinical Psychology in Psychiatry, Department of Psychiatry) and Dr. Allan Pack (John Miclot Professor, Division of Sleep Medicine, Department of Medicine).
+# Load necessary packages
+library(rtweet)
+library(dplyr)
+library(tidytext)
+library(ggplot2)
+library(forcats)
+library(tm)
+library(randomForest)
+library(e1071)
+library(pROC)
+library(ROCR)
+library(lubridate)
+library(scales)
+library(tableone)
+library(jtools)
+library(RColorBrewer)
+library(ggmap)
+library(maps)
+library(mapdata)
+library(sf)
+library(purrr)
+library(tigris)
+library(tools)
+
+```
+
+
+
+
+
+### Overview
+
+This study extracted data from Twitter to identify tweets mentioning sleep complaints at the time of posting. Using the results of a simple machine learning classifier, based on manual annotation of tweets according to their status of whether the tweet reports a sleep complaint at the time of posting, this study classified geotagged tweets posted in the United States. Then, the prevalence of sleep complaints in different geographic regions and the number of tweets posted at different times of the day were investigated. Comparisons of the the number of tweets before and after the change from daylight savings time to standard time were also evaluated in this project.
+
+I have spoken to the following faculty members that were instrumental to the appropriate design of this study:
+- Dr. Graciela Gonzalez-Hernandez (Associate Professor of Informatics, Division of Informatics, Department of Epidemiology, Biostatistics, and Informatics);
+- Dr. Philip Gehrman (Associate Professor of Clinical Psychology in Psychiatry, Department of Psychiatry);
+- Dr. Allan Pack (John Miclot Professor, Division of Sleep Medicine, Department of Medicine).
 
 The final project is available in [this repository](https://github.com/mazzottidr/BMIN503_Final_Project).
 
 ### Introduction 
+
 Sleep disorders affect a large proportion of the population in the United States and worldwide, and it has been associated with several health consequences. Sleep complaints are a manifestation of an acute or chronic state of sleep disturbances and can be captured by a number of validated questionnaires and objective instruments. Social media platforms have been recently considered as another powerful source of data about human behavior. For example, recent studies have explored data generated from Twitter, a micro-blogging social medial platform, and successfully captured information about drug exposures, suggesting that it could be a relevant pharmacovigilance tool. Because of the importance of good sleep habits for maintenance of health, we hypothesize that sleep-related behaviors, such as sleep complaints, can be captured using social media data mining and natural language processing tools to support digital epidemiology of sleep disorders.
 
-In this study, I will utilize tools that I was exposed during the Data Science for Biomedical Informatics course to design a proof-of-concept study of the ability to capture sleep-complaints from Twitter data. In collaboration with other faculty members at the University of Pennsylvania (Dr. Graciela Gonzalez-Hernandez, Dr. Philip Gehrman and Dr. Allan Pack), we are collecting data from Twitter in two separate experiments:
+In this study, I will utilize tools that I was exposed during the Data Science for Biomedical Informatics course to design a proof-of-concept study of the ability to capture sleep-complaints from Twitter data. In collaboration with other faculty members at the University of Pennsylvania (Dr. Graciela Gonzalez-Hernandez, Dr. Philip Gehrman and Dr. Allan Pack), we collected data from Twitter in two separate experiments:
 
-1. Tweets mentioning the terms "have insomnia" or "hate insomnia", to evaluate the performance of a simple supervised machine learning classifier identifying tweets mentioning these sleep complaints;
+- *Experiment 1:* Tweets mentioning terms that relate to sleep complaints *at the time of posting* (see _Methods_ below for details), to evaluate the performance of a simple supervised machine learning classifier in identifying tweets mentioning sleep complaints;
 
-2. Geotagged tweets posted within the boundaries of the United States, to evaluate the geographic and circadian distribution of tweets mentioning sleep complaints (using the model above), as well as the effect of the transition between daylight savings time and standard time on the these distributions.
+- *Experiment 2:* Geotagged tweets posted within the boundaries of the United States, to evaluate the geographic and circadian distribution of tweets mentioning sleep complaints (using the model above), as well as the effect of the transition between daylight savings time and standard time on the these distributions.
 
-This study is interdisciplinary because it uses concepts from sleep medicine, circadian biology, epidemiology and biomedical informatics. The successful completion of this study might reveal which regions of the United States are more likely to report sleep complaints in a social media platform. We hypothesize that there will be an effect of the latitude and distance from time zone boundaries on the prevalence of sleep complaints.
+The study has the following aims:
 
+**Aim 1:** Evaluate whether a machine learning classifier can be used to detect tweets mentioning sleep complaints at the time of posting
+
+**Aim 2:** Evaluate the effect of a change from daylight savings time (DST) to standard time (ST) in the number and temporal distribution of tweets mentioning sleep complaints
+
+**Aim 3:** Evaluate the geographic distribution of tweets mentioning sleep complaints in the United States
+
+
+This study is interdisciplinary because it uses concepts from sleep medicine, circadian biology, epidemiology and biomedical informatics. The successful completion of this study might reveal which regions of the United States are more likely to report sleep complaints in a social media platform. We hypothesize that there will be a circadian and a geographic effect on the number of tweets classified as containing sleep complaints. In addition, we hypothesize that the change between daylight savings time to standard time that occurred on 11/03/2019 will have an impact on the number of tweets mentioning sleep complaints in the states that the change was effective.
 
 ### Methods
 
-Data is currently being collected in parallel for experiments 1 and 2. Data from Experiment 1 is being collected by Dr. Graciela Gonzalez-Hernandez using her team's optmized scripts. Data for Experiment 2 was collected using the `rtweet` package. Data collection started on `Wed Oct 30 13:37:51 +0000 2019` and finished on `Wed Nov 13 14:42:05 +0000 2019` The transition from daylight savings time to standard time happened on Sunday, Nov 3rd 2019 at 2:00 AM. The code used to collect data for this experiment is represented below. Collection was restricted only for tweets tagged with geolocation coordinates within the United States (see `lookup_coords("usa")` below). Because data collection required authentication via the Twitter API, and lasted aproximately two weeks, the code below is for illustration purposes. Data was collected using one of PMACS servers (`sarlacc.pmacs.upenn.edu`) using the command below in an UNIX terminal:
+The sections below describe the methods of each experiment conducted in this project. Data for Experiments 1 and 2 were collected using the [Twitter API](https://developer.twitter.com/en/docs). Details regarding data collection, parsing, processing and related methods are shown below for each experiment.
+
+#### Experiment 1: Classification of tweets reporting sleep complaints at the time of posting
+
+Using the Twitter API and the function `search_tweets()` from the `rtweet` R package, a collection of 17,998 tweets matching the following terms was extracted in 11/22/2019:
+
+- can't sleep
+- have trouble sleep
+- have trouble sleeping
+- have problem sleep
+- have problem sleeping
+- had trouble sleep
+- had trouble sleeping
+- had problem sleep
+- had problem sleeping
+- hate sleep
+- hate insomnia
+- insomnia
+- snore
+- snoring
+- wide awake
+- sleep last night
+
+It is clear that just the mention of these terms in a tweet does not indicate whether the individual who posted it was experiencing a sleep complaint at the time of posting. Therefore, a classifier was designed to train a machine learning algorithm in a subset of tweets that were manually annoated in three classes: "With sleep complaint", "Uncertain" and "Without sleep complaint". Tweets annotated as "With sleep complaint" had clear indication that the user was experiencing the complaint at the time of posting. Tweets annotated as "Uncertain" mentioned a sleep complaint, but it was unclear whether it was referring to the time it was posted or at a different time. Finally, tweets annotated as "Without sleep complaint" have clear indications based on the content that they do not report a sleep complaint. The table below shows examples of each manually annotated class:
+
+| Class                   | Example Tweet                             |
+| ------------------------|-------------------------------------------|
+| With  sleep complaint   | Hi, it’s 2:58AM rn and I can’t sleep      |
+| Uncertain               | When you can't sleep stay awake to morning|
+| Without sleep complaint | I can’t wait to sleep in tomorrow.        |
+
+The chunk below describes the code used to extract these tweets and to create a `.csv` file that was further used to manually annotate tweets.
+
+```{r eval=FALSE}
+
+## Script to perform extracion of sleep complaints terms and training using machine learning classifier
+
+## store api keys - these are kept blank here for security purposes
+api_key <- ""
+api_secret_key <- ""
+access_token <- ""
+access_token_secret <- ""
+
+## authenticate via web browser
+token <- create_token(
+        app = "sleep_tweet_mazzottidr",
+        consumer_key = api_key,
+        consumer_secret = api_secret_key,
+        access_token = access_token,
+        access_secret = access_token_secret)
+
+t <- gsub(" ", "", gsub(":", "", gsub("-", "", Sys.time())))
+
+fname <- paste0("Sleep_tweets_", t, ".json")
+
+# Search sleep complaints tweets
+sleep_patterns <- c("can't sleep",
+                    "have trouble sleep",
+                    "have trouble sleeping",
+                    "have problem sleep",
+                    "have problem sleeping",
+                    "had trouble sleep",
+                    "had trouble sleeping",
+                    "had problem sleep",
+                    "had problem sleeping",
+                    "hate sleep",
+                    "hate insomnia",
+                    "insomnia",
+                    "snore",
+                    "snoring",
+                    "wide awake",
+                    "sleep last night")
+
+sleep_patterns <- paste(sleep_patterns, collapse = " OR ")
+
+sleep_ts <- search_tweets(q = sleep_patterns, n = 18000, parse = T, include_rts = F, retryonratelimit=T, language = "en", type = "mixed")
+
+write.csv(select(sleep_ts, user_id, status_id, text), "ManualAnnotation_22112019.csv", row.names = F)
+
+```
+
+After manual annotation of tweets into "With sleep complaint", "Uncertain" and "Without sleep complaint", two machine learning methods were used to evaluate whether features extracted from the text of the tweets could be useful in classyfing new tweets into these classes. For this project, a simple feature extraction approach named **term frequency - inverse document frequency (tf-idf)** was used. This approach uses an information retrieval method that helps identifying the relative importance of a particular word within a document corpus (in this case, a tweet). Each word in the tweet receives a weighted score, that can be used as a numerical feature in classification algorithms. The code below describes the step used to perform feature extraction from a sample of manually annotated tweets. For the purpose of this particular project, only a small proportion of tweets were manually annotated (N=500; 2.8%), therefore the performance of the classifier is expected to be limited. Also, tweets that were labeled as "Uncertain" were removed from this analysis, for simplicity of interpretation.
+
+```{r message=FALSE, warning=FALSE}
+
+# Load annotated dataset
+annotated_tweets <- read.csv("ManualAnnotation_22112019_500.csv", stringsAsFactors = F, nrows = 500)
+
+# Clean column names and create factor for annotated labels
+annotated_tweets_dataset <- annotated_tweets %>%
+        select(status_id, Label..0..No..1..Low.Confidence..2..High.confidence..NA..invalid., text) %>%
+        rename("Label"="Label..0..No..1..Low.Confidence..2..High.confidence..NA..invalid.") %>%
+        filter(Label!=1) %>%
+        mutate(Label=as.factor(Label)) %>%
+        mutate(Label=fct_recode(Label, "No complaints"="0", "With complaints"="2")) %>%
+        # Create tweet identifier
+        mutate(document_id=1:nrow(.))
+
+
+# Extract text features using term frequency - inverse document frequency (tf-idf) approach
+# This strategy was based on this post: # https://cfss.uchicago.edu/notes/supervised-text-classification/
+
+# This file will be used as the source of predictors of to train a tweet classifier based on the frequency of specific words
+annotated_dtm_tfidf <- annotated_tweets_dataset %>%
+        # Tokenize text
+        unnest_tokens(word, text) %>%
+        # Remove common stop words in English
+        anti_join(stop_words) %>%
+        # Remove additional irrelevant HTML tags
+        filter(!grepl("https|t.co|http|bit.ly|goo.gl", word)) %>%
+        # Count number of words in each document
+        count(document_id, word) %>%
+        # Create weight based on tf-idf
+        cast_dtm(document = document_id, term = word, value = n, weighting = tm::weightTfIdf) %>%
+        # Remove terms to reduce sparsity
+        removeSparseTerms(sparse = 0.99)
+
+# Create data frame for prediction
+tweet_ML_df <- data.frame(Label=annotated_tweets_dataset$Label, as.matrix(annotated_dtm_tfidf))
+
+# This file will calculate the relative frequency of each word using the tf-idf approach
+annotated_tfidf <- annotated_tweets_dataset %>%
+        mutate(document_id=1:nrow(.)) %>%
+        unnest_tokens(word, text) %>%
+        anti_join(stop_words) %>%
+        filter(!grepl("https|t.co|http|bit.ly|goo.gl", word)) %>%
+        count(Label, word) %>%
+        bind_tf_idf(term = word, document = Label, n = n)
+
+```
+
+From all manually annotated tweets, there were `r nrow(tweet_ML_df)` tweets labeled as "With sleep complaint" (N=295; 62.6%) or "Without sleep complaint" (N=37.4%). A distribution of the most frequent words in each group of tweets is shown in the figure below.
+
+```{r message=FALSE, warning=FALSE}
+# Prepare dataset for plotting most frequent words in each Label
+plot_tfidf <- annotated_tfidf %>%
+        arrange(desc(tf_idf)) %>%
+        mutate(word = factor(word, levels = rev(unique(word)))) %>%
+        group_by(Label) %>%
+        # Plotting only 10 most frequent words
+        top_n(10) %>%
+        ungroup() %>%
+        mutate(word = reorder_within(word, tf_idf, Label))
+
+ggplot(plot_tfidf, aes(word, tf_idf)) +
+  geom_col() +
+  scale_x_reordered() +
+  labs(x = "Most frequent words", y = "tf-idf") +
+  facet_wrap(~ Label, scales = "free") +
+  coord_flip() +
+  theme_bw()
+
+# Note that some are Emojis - potentially try to find a way to plot emojis here as well
+# See here: https://stackoverflow.com/questions/47730589/plot-emojis-emoticons-in-r-with-ggplot
+
+```
+
+After the calculation of tf-idf features for each word, two machine learning methods were evaluated: Random Forests and Support Vector Machines. These methods were applied to the labeled data using 3-fold cross validation, given the size of the training dataset. After training, models were evaluated according to their performance in classifying tweets as "Without sleep complaint" or "With sleep complaint" using the area under the receiver operating characteristics (ROC) curve (AUC) and the precision-recall curve. The code below describes the steps for the machine learning analysis, including training, cross-validation and evaluation.
+
+```{r warning=FALSE}
+
+#### Train 2 different classifiers, Random Forests and Support Vector Machines
+#### Using 3-fold cross-validation
+
+# Training data (all data)
+# SVM
+set.seed(1000)
+tweet.all.svm <- svm(Label ~ ., data = tweet_ML_df, scale = TRUE, kernel = "radial", probability = TRUE)
+tweet.all.svm.pred <- predict(tweet.all.svm, tweet_ML_df, probability = TRUE)
+tweet.all.svm.pred.withComplaints <- attr(tweet.all.svm.pred, "probabilities")[ , 1]
+
+# Random Forest
+set.seed(1000)
+tweet.all.rf <- randomForest(Label ~ ., data = tweet_ML_df, ntree = 200, importance = TRUE)
+tweet.all.rf.pred <- predict(tweet.all.rf, tweet_ML_df, type = "prob")
+tweet.all.rf.pred.withComplaints <- tweet.all.rf.pred[ , 2]
+
+# 3-Fold Cross Validation
+N = nrow(tweet_ML_df)
+K = 3
+set.seed(1000)
+s = sample(1:K, size = N, replace = T)
+pred.outputs.svm <- vector(mode = "numeric", length = N)
+pred.outputs.rf <- vector(mode = "numeric", length = N)
+obs.outputs <- vector(mode = "numeric", length = N)
+offset <- 0
+for(i in 1:K){
+        train <- filter(tweet_ML_df, s != i)
+        test <- filter(tweet_ML_df, s == i)
+        obs.outputs[1:length(s[s == i]) + offset] <- test$Label
+        
+        #SVM train/test
+        svm.m <- svm(Label ~ ., data = train, scale = TRUE, kernel = "radial", probability = TRUE)
+        svm.pred.curr <- predict(svm.m, test, probability = TRUE) 
+        pred.outputs.svm[1:length(s[s == i]) + offset] <- attr(svm.pred.curr, "probabilities")[ , 1]
+        
+        #RF train/test
+        rf <- randomForest(Label ~ ., data = train, ntree = 200)
+        rf.pred.curr <- predict(rf, newdata = test, type = "prob") 
+        pred.outputs.rf[1:length(s[s == i]) + offset] <- rf.pred.curr[ , 2]
+       
+        offset <- offset + length(s[s == i])
+}
+### Save models (using all data)
+saveRDS(tweet.all.svm, "SVM_tweet.all.rf.Rdata")
+saveRDS(tweet.all.rf, "RandomForest_tweet.all.rf.Rdata")
+
+```
+
+
+The performance evaluation of each machine learning method is presented below.
+
+
+```{r warning=FALSE, message=F}
+### Evaluate models
+
+#SVM
+# All data performance
+roc(tweet_ML_df$Label, tweet.all.svm.pred.withComplaints, ci = TRUE)
+
+# Cross validation performance
+roc(obs.outputs, pred.outputs.svm, ci = TRUE)
+
+# ROC curves
+plot.roc(tweet_ML_df$Label, tweet.all.svm.pred.withComplaints, main = "AUC - Support Vector Machine")
+plot.roc(obs.outputs, pred.outputs.svm, ci = TRUE, col = "blue", add = TRUE)
+legend("bottomright", legend = c("Training", "Cross-Validation"), col = c("black", "blue"), lwd = 1)
+
+# Precision recall curves
+plot(performance(prediction(tweet.all.svm.pred.withComplaints, tweet_ML_df$Label), "prec", "rec"), main = "Precision-recall curve - Support Vector Machine")
+plot(performance(prediction(pred.outputs.svm, obs.outputs), "prec", "rec"), add=T, col = "blue",  ci = TRUE)
+legend("bottomright", legend = c("Training", "Cross-Validation"), col = c("black", "blue"), lwd = 1)
+
+
+#Random Forest
+
+# All data performance
+roc(tweet_ML_df$Label, tweet.all.rf.pred.withComplaints, ci = TRUE)
+
+# Cross validation performance
+roc(obs.outputs, pred.outputs.rf, ci = TRUE)
+
+# ROC curves
+plot.roc(tweet_ML_df$Label, tweet.all.rf.pred.withComplaints, main = "AUC - Random Forest")
+plot.roc(obs.outputs, pred.outputs.rf, ci = TRUE, col = "darkgreen", add = TRUE)
+legend("bottomright", legend = c("Training", "Cross-Validation"), col = c("black", "darkgreen"), lwd = 1)
+
+
+# Precision recall curves
+plot(performance(prediction(tweet.all.rf.pred.withComplaints, tweet_ML_df$Label), "prec", "rec"), main = "Precision-recall curve - Random Forest")
+plot(performance(prediction(pred.outputs.rf, obs.outputs), "prec", "rec"), add=T, col = "darkgreen",  ci = TRUE)
+legend("bottomleft", legend = c("Training", "Cross-Validation"), col = c("black", "darkgreen"), lwd = 1)
+
+
+```
+
+Based on the inspection of ROC and precision-recall curves, as well as on the values of the cross-validation AUC, the random forest models showed better performance in the classification of tweets mentioning sleep complaints when compared to support vector machines (AUC-RF=0.851 vs. AUC-SVM=0.769). Therefore the machine learning classifier of choice for labeling tweets extracted in Experiment 2 will be based on random forests.
+
+#### Experiment 2: Annotation of geotagged tweets and evaluation of circadian and geographical effects on distribution of sleep complaint tweets
+
+Data for Experiment 2 was also collected using the `rtweet` package. Data collection started on `Wed Oct 30 13:37:51 +0000 2019` and finished on `Wed Nov 13 14:42:05 +0000 2019` The transition from daylight savings time (DST) to standard time (ST) happened on Sunday, Nov 3rd 2019 at 2:00 AM. In summary, the data was processed so that tweets reporting sleep complaints at the time of posting could be identified using the trained classifier described in Experiment 1 (Random Forest, see above). Also, becuase data was collected at different time zones, the timestamp for each tweet had to be adjusted to reflect the time zone the user was in when the tweet was posted. All these steps are described as follows.
+
+The code used to collect data for this experiment is shown below. Collection was restricted only for tweets tagged with geolocation coordinates within the United States (see `lookup_coords("usa")` below). Because data collection required authentication via the Twitter API, and lasted aproximately two weeks, the code below is for illustration purposes. Data was collected using one of PMACS servers (`sarlacc.pmacs.upenn.edu`) using the command below in an UNIX terminal:
 
 ```{bash eval=FALSE}
 # This is a bash command
@@ -75,7 +385,7 @@ stream_tweets(lookup_coords("usa"), timeout = 60*60*24*14, parse = F, gzip=T, la
 
 ```
 
-Aftar data was collected, the file `USA_tweets_20191030093755.json` was created, containing a random sample of the tweets that were posted during the collection period, according to the [Twitter API](https://developer.twitter.com/en/docs). The resulting file is an unparsed output of the `rtweet` package (see `parse = F` above), and this output format was prefered to avoid additional issues loading this large data file into R. To facilitate post-processing of this large output, the file was split in smaller files containing aproximately 500,000 rows, using the following command in an UNIX terminal: 
+After data was collected, the file `USA_tweets_20191030093755.json` was created, containing a random sample of all tweets that were posted during the collection period, according to the [Twitter API](https://developer.twitter.com/en/docs). The resulting file is an unparsed output of the `rtweet` package (see `parse = F` above), and this output format was prefered to avoid additional issues loading this large data file into R. To facilitate post-processing of this large output, the file was split in smaller files containing aproximately 500,000 rows, using the following command in an UNIX terminal: 
 
 ```{bash eval=FALSE}
 # This is a bash command
@@ -139,8 +449,7 @@ for (f in files_to_process) {
 }
 ```
 
-The result of running the script above was the creation of 38 `*.Rdata` files representing the processed tweets. The script below (`load__getTZ_calTime.R`) was then run in `sarlacc.pmacs.upenn.edu` to combine all `.Rdata` files into one data frame, to create an additional variable representing the timezone that the tweet was posted, and calculating an adjusted posting time variable, taking into account the local time the tweet was posted (considering time zone and daylight savings time)
-
+The result of running the script above was the creation of 38 `*.Rdata` files representing the processed tweets. The script below (`load__getTZ_calTime.R`) was then run in `sarlacc.pmacs.upenn.edu` to combine all `.Rdata` files into one data frame, to create an additional variable representing the timezone that the tweet was posted, and calculating the adjusted posting time variable, taking into account the local time the tweet was posted (considering time zone and DST / ST status)
 
 ```{r eval=F}
 # Load all tweets and create one data frame, get time zone and calculate local time of the tweet, according to time zone
@@ -166,7 +475,6 @@ tweet_df <-  bind_rows(tweet_list)
 
 rm(tweet_list) # Remove list to save memory
 
-
 # Find which timezones have DST changes and calculate local time
 tweet_df_final <- tweet_df %>%
         # Find timezones. Caveat: "fast" might be less accurate
@@ -190,27 +498,384 @@ saveRDS(tweet_df_final, "Processed_Tweets_11202019.Rdata")
 
 ```
 
+The total number of sucessfully oarsed tweets during this data collection period was 4,699,612. After processing of the dataset containing tweets spanning the week of the change from DST to ST, the next step was to annotate these tweets using the trained random forest classifier from Experiment 1, with regard to whether the tweet mentions a sleep complaint at the time of posting. The code below illustrates this step. Due to the large number of tweets that had to be annotated, the code below was status `eval=F`.
+
+```{r eval=F}
+
+# Load Random Forest model
+tweet.all.rf <- readRDS("RandomForest_tweet.all.rf.Rdata")
+
+# Load Collected twitter data
+sleep_tweets <- readRDS("data/Processed_Tweets_11202019.Rdata")
+
+# Process twitter data to allow annotation - this means extracting text features (tf-idf) from the whole collection of tweets
+sleep_tweets_tf_formatted <- sleep_tweets %>%
+        # Create id variable vor the tweet
+        mutate(document_id=1:nrow(.)) %>%
+        # select only relevant columns
+        select(document_id, user_id, created_at, LocalTime, Timezone, lat, lng, text) %>%
+        # Tokenize text
+        unnest_tokens(word, text) %>%
+        # Remove common stop words in English
+        anti_join(stop_words) %>%
+        # Remove additional irrelevant HTML tags
+        filter(!grepl("https|t.co|http|bit.ly|goo.gl", word)) %>%
+        # Count number of words in each document
+        count(document_id, word) %>%
+        mutate(word=gsub("’", ".", word)) %>%
+        # Filter only words that are present in the trained model - this is relevent due to the relatively small size of the training dataset
+        filter(word %in% names(tweet.all.rf$forest$xlevels))
+
+saveRDS(sleep_tweets_tf_formatted, "sleep_tweets_tf_formatted_only_model_words.Rdata")
+
+# Calculate tf-idf
+sleep_tweets_tf_idf <- sleep_tweets_tf_formatted %>%
+        # Create weight based on tf-idf
+        cast_dtm(document = document_id, term = word, value = n, weighting = tm::weightTfIdf)
+saveRDS(sleep_tweets_tf_idf, "collected_sleep_tweets_tf_idf_only_model_words.Rdata")
+
+# Define which tweets are negative (does not contain any word in the final random forest model) and potentially positive (contains words from the final model)
+# These tweets will be tested with the Random Forest model
+potentially_testable_tweet_document_id <- sleep_tweets_tf_formatted$document_id
+# These tweets will be considered negative
+NoSleepComplaint_tweet_document_id <- (1:nrow(sleep_tweets))[!(1:nrow(sleep_tweets) %in% potentially_testable_tweet_document_id)]
+
+# Identify positive tweets using the Random Forest Model
+new.tweets_df <- data.frame(as.matrix(sleep_tweets_tf_idf))
+
+#Check if there are missing variables and add them to df with the value of 0
+addColumns <- names(tweet.all.rf$forest$xlevels)[!(names(tweet.all.rf$forest$xlevels) %in% colnames(new.tweets_df) )]
+add_df <- matrix(0, nrow = nrow(new.tweets_df), ncol = length(addColumns))
+colnames(add_df) <- addColumns
+new.tweets_df <- data.frame(new.tweets_df, add_df)
+
+# Apply random forest model
+tweet.new.pred <- predict(tweet.all.rf, new.tweets_df, type = "prob")
+
+# Save predictions
+saveRDS(tweet.new.pred, "tweet.new.pred.Rdata")
+
+# Get positive predictions (predicted probability>0.7)
+positive_tweets <- as.numeric(rownames(tweet.new.pred)[tweet.new.pred[,2]>0.7])
+
+# Merge predictions to original list of tweets
+# Create regular expression to restict search space for tweets that mention one of the terms below
+sleep_regex <- "sleep|insomnia|snor|awake"
+
+# Merge
+sleep_tweets <- sleep_tweets %>%
+        mutate(document_id=1:nrow(.),
+               PredictedComplaints=0,
+               MatchedPattern=grepl(sleep_regex, text))
+sleep_tweets$PredictedComplaints[sleep_tweets$document_id %in% positive_tweets] <- 1
+
+# Organize dataset
+sleep_tweets <- sleep_tweets %>%
+        mutate(HasComplaints=ifelse(PredictedComplaints==1 & MatchedPattern, 1, 0))
 
 
-Additional methods will be available.
+# Filter time frame where data will be used for analysis and create DST variable
+sleep_tweets <- sleep_tweets %>%
+        # Filter out everything after 2019-11-06
+        filter(created_at<ymd_hms("2019-11-06 13:37:51")) %>%
+        # Create Variable indicating ST or DST
+        mutate(DST_ST=as.factor(ifelse(LocalTime<ymd_hms("2019-11-03 02:00:00"), "DST", "Standard Time")))
 
-Details on data collection - Experiment 1
+### Add geolocation data
 
-Classification of insomnia/sleep complaints tweets using machine learning
+# Load counties data
+counties <- readRDS(gzcon(url("https://raw.githubusercontent.com/HimesGroup/BMIN503/master/DataFiles/uscounties_2010.rds")))
 
-Distribution of insomnia/sleep complaints tweets according to longitude and latitude
+# Load FIPS codes (from here: https://github.com/kjhealy/fips-codes)
+states <- read.csv(url("https://raw.githubusercontent.com/kjhealy/fips-codes/master/state_fips_master.csv"), stringsAsFactors = F)
+states$fips <- as.character(states$fips)
 
-Distribution of insomnia/sleep complaints tweets according to distance from time-zone boundaries
+# Convert sleep_tweets to sf object
+sleep_tweets_sf = st_as_sf(sleep_tweets, coords = c("lng", "lat"), 
+                 crs = 4326, agr = "constant")
+
+# Merge sleep_tweets_sf with counties
+sleep_tweets_sf <- st_join(sleep_tweets_sf, counties)
+
+# Merge sleep_tweets_sf with states for names
+sleep_tweets_sf <- left_join(sleep_tweets_sf, states, by = c("STATE"="fips"))
 
 
+# Save annotated tweets data frame - this will be made available via a Dropbox link, so the following results and plots in this report can included in this report
+saveRDS(sleep_tweets_sf, "Final_Annotated_Sleep_Tweets_12022019.Rdata")
 
-> From template: In the first paragraph, describe the data used and general methodological approach. Subsequently, incorporate full R code necessary to retrieve and clean data, and perform analysis. Be sure to include a description of code so that others (including your future self) can understand what you are doing and why. 
+```
+
+The code below loads the data frame containing the annotated tweets, and it is necessary replicate the analyses presented in the following Results section **Attention**: this is a large file (345.1 MB).
+
+``` {r}
+# Load annotated tweets
+sleep_tweets <- readRDS(gzcon(url("https://www.dropbox.com/s/rzw3zxrlbey1qaz/Final_Annotated_Sleep_Tweets_12022019.Rdata?dl=1")))
+
+```
 
 
 ### Results
 
-During the collection period, there were 20,566,878 tweets sucessfuly extracted using the Twitter API
+#### Description of the sample of tweets
 
-Additional results will be available later.
+Due to a problem during data collection, tweets between 2019-11-07 and 2019-11-13 were not parsed correctly. Therefore, only data from Wed Oct 30 13:37:51 +0000 2019 and Wed Nov 06 13:37:51 +0000 2019 was used, corresponding to exactly one week of data, overlapping with the transition from DST to ST that occurred on Nov 03 02:00:00 +0000 2019. From the original sample of 4,699,612 tweets, 3,738,383 (79.5%) were included in the analysis during the defined period.
 
-> From template: Describe your results and include relevant tables, plots, and code/comments used to obtain them. End with a brief conclusion of your findings related to the question you set out to address. You can include references if you'd like, but this is not required.
+The code below calculates the breakdown of tweets classified as "With sleep complaints" and "Without sleep complaints" based on the random forest classifier trained in Experiment 1, for the whole period of data collection
+
+``` {r}
+# Counts and proportions of sleep complaint tweets
+
+table_df <- as.data.frame(select(sleep_tweets, HasComplaints))
+print(CreateTableOne(vars = "HasComplaints", data = table_df, factorVars = "HasComplaints"), showAllLevels=T, catDigits=3)
+
+```
+
+From the over 3.7 million tweets parsed, 11,044 (0.295%) geotagged tweets were classified as having sleep complaints using the trained random forest.
+
+#### Tweets reporting sleep complaints are more prevalent after the change from DST to ST
+
+To assess whether the change from DST to ST is associated with changes in the proportion of tweets labeled as reporting sleep complaints, the proportions of such tweets before and after the change were compared using Fisher's exact test. The level of significance was set to 0.05.
+
+``` {r}
+# Proportion of sleep complaint tweets before and after the change from DST to ST
+table_df <- as.data.frame(select(sleep_tweets, HasComplaints, DST_ST))
+print(CreateTableOne(vars = "HasComplaints", data = table_df, strata = "DST_ST", factorVars = "HasComplaints"), showAllLevels =T,  pDigits = 5, catDigits=3)
+```
+
+The table above reports the results of the association test. The proportion of tweets reporting sleep complaints was signifcantly higher after the change to ST (0.329%) when compared to before the change (0.273%; p<0.00001). To better understand the magnitude of the change, a logistic regression model was used to calculate the odds ratio regarding this relationship.
+
+``` {r}
+# Univariate logistic regression between DST status and tweets reporting sleep complaints
+dst.lr <- glm(HasComplaints ~ DST_ST, data=sleep_tweets, family = binomial("logit"))
+summ(dst.lr, confint = T, exp = T)
+
+```
+
+While the proportion of tweets reporting sleep complaints are relatively small, a change from DST to ST reflected in an 1.21 increase in the odds of reporting sleep complaints via Twitter in univariate models.
+
+#### Circadian distribution of tweets reporting sleep complaints is in phase with night time
+
+To better understand whether the tweets reporting sleep complaints are in fact being posted during night time, the distribution of all tweets and tweets reporting sleep complaints as a function of time and date was plotted in the figures below.
+
+```{r fig.width=13}
+time_rects <- data.frame(xmin=c(as_datetime("2019-10-30 19:00:00"),
+                                as_datetime("2019-10-31 19:00:00"),
+                                as_datetime("2019-11-01 19:00:00"),
+                                as_datetime("2019-11-02 19:00:00"),
+                                as_datetime("2019-11-03 19:00:00"),
+                                as_datetime("2019-11-04 19:00:00"),
+                                as_datetime("2019-11-05 19:00:00")),
+                         xmax=c(as_datetime("2019-10-31 7:00:00"),
+                                as_datetime("2019-11-01 7:00:00"),
+                                as_datetime("2019-11-02 7:00:00"),
+                                as_datetime("2019-11-03 7:00:00"),
+                                as_datetime("2019-11-04 7:00:00"),
+                                as_datetime("2019-11-05 7:00:00"),
+                                as_datetime("2019-11-06 7:00:00")),
+                         ymin=0, ymax=Inf)
+
+plot_df <- sleep_tweets %>%
+  as.data.frame() %>%
+          # group data by hour - count all tweets in each hour interval
+        mutate(Local_floor_hour=floor_date(sleep_tweets$LocalTime, "1 hour")) %>%
+        group_by(Local_floor_hour) %>%
+        summarise(n_tweets=n())
+
+
+ggplot() +
+  geom_rect(data = time_rects, aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax), fill = "grey", alpha = 0.6) +
+  geom_bar(data=plot_df, aes(x=Local_floor_hour, y=n_tweets), stat="identity") +
+  theme_bw() +
+  scale_x_datetime(breaks = date_breaks("12 hours"), labels = date_format("%m/%d %H:00")) +
+  ylab("Number of tweets") +
+  xlab("Date and time") +
+  ggtitle("Hourly distribution of number of all tweets collected", subtitle = "Dashed line represents change to Standard Time. Shaded areas represent night time (7pm-7am).") +
+  geom_vline(xintercept = ymd_hms("2019-11-03 02:00:00"), lty="dashed", color="darkred")
+
+```
+
+In the plot above, where all tweets are plotted as a function of time, we observe a strong circadian influence in the number of posted tweets. The majority of tweets were posted during the day (7am-7pm) and a much lower number of tweets were posted during the night (7pm-7am).
+
+
+```{r fig.width=13}
+time_rects <- data.frame(xmin=c(as_datetime("2019-10-30 19:00:00"),
+                                as_datetime("2019-10-31 19:00:00"),
+                                as_datetime("2019-11-01 19:00:00"),
+                                as_datetime("2019-11-02 19:00:00"),
+                                as_datetime("2019-11-03 19:00:00"),
+                                as_datetime("2019-11-04 19:00:00"),
+                                as_datetime("2019-11-05 19:00:00")),
+                         xmax=c(as_datetime("2019-10-31 7:00:00"),
+                                as_datetime("2019-11-01 7:00:00"),
+                                as_datetime("2019-11-02 7:00:00"),
+                                as_datetime("2019-11-03 7:00:00"),
+                                as_datetime("2019-11-04 7:00:00"),
+                                as_datetime("2019-11-05 7:00:00"),
+                                as_datetime("2019-11-06 7:00:00")),
+                         ymin=0, ymax=Inf)
+
+plot_df <- sleep_tweets %>%
+    as.data.frame() %>%
+        # group data by hour - count all tweets in each hour interval
+        mutate(Local_floor_hour=floor_date(sleep_tweets$LocalTime, "1 hour")) %>%
+        filter(HasComplaints==1) %>%
+        group_by(Local_floor_hour) %>%
+        summarise(n_tweets=n())
+
+
+ggplot() +
+  geom_rect(data = time_rects, aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax), fill = "grey", alpha = 0.6) +
+  geom_bar(data=plot_df, aes(x=Local_floor_hour, y=n_tweets), stat="identity") +
+  theme_bw() +
+  scale_x_datetime(breaks = date_breaks("12 hours"), labels = date_format("%m/%d %H:00")) +
+  ylab("Number of tweets") +
+  xlab("Date and time") +
+  ggtitle("Hourly distribution of number of tweets classified as reporting sleep complaints", subtitle = "Dashed line represents change to Standard Time. Shaded areas represent night time (7pm-7am).") +
+  geom_vline(xintercept = ymd_hms("2019-11-03 02:00:00"), lty="dashed", color="darkred")
+
+
+```
+
+When only looking at the tweets that were classified as reporting sleep complaints, we also observe a circadian pattern. However, this pattern seems out of phase with the pattern observed with all tweets. Here, the majority of tweets are posted during the night time. In addition, we observe that the number of tweets reporting sleep complaints are slightly increased after the change from DST to ST, supporting the results of the association test and logistic regression above.
+
+Finally, to facilitate the comparison between the circadian distribution of all tweets versus tweets reporting sleep complaints, the number of tweets standardized by type (all versus resporting sleep complaints) was plotted in the figure below.
+
+```{r fig.width=13, message=FALSE, warning=FALSE}
+time_rects <- data.frame(xmin=c(as_datetime("2019-10-30 19:00:00"),
+                                as_datetime("2019-10-31 19:00:00"),
+                                as_datetime("2019-11-01 19:00:00"),
+                                as_datetime("2019-11-02 19:00:00"),
+                                as_datetime("2019-11-03 19:00:00"),
+                                as_datetime("2019-11-04 19:00:00"),
+                                as_datetime("2019-11-05 19:00:00")),
+                         xmax=c(as_datetime("2019-10-31 7:00:00"),
+                                as_datetime("2019-11-01 7:00:00"),
+                                as_datetime("2019-11-02 7:00:00"),
+                                as_datetime("2019-11-03 7:00:00"),
+                                as_datetime("2019-11-04 7:00:00"),
+                                as_datetime("2019-11-05 7:00:00"),
+                                as_datetime("2019-11-06 7:00:00")),
+                         ymin=-Inf, ymax=Inf)
+
+
+sleep_tweets_counts.all <- sleep_tweets %>%
+    as.data.frame() %>%
+        group_by(Local_minute=floor_date(sleep_tweets$LocalTime, "30 seconds")) %>%
+        summarise(n_tweets.all=n())
+
+sleep_tweets_counts.complaints <- sleep_tweets %>%
+    as.data.frame() %>%
+        group_by(Local_minute=floor_date(sleep_tweets$LocalTime, "30 seconds"), HasComplaints) %>%
+        summarise(n_tweets.complaints=n()) %>%
+        filter(HasComplaints==1) %>%
+        ungroup() %>%
+        select(-HasComplaints)
+
+sleep_tweets_counts <- left_join(sleep_tweets_counts.all, sleep_tweets_counts.complaints, by="Local_minute") 
+sleep_tweets_counts$n_tweets.complaints[is.na(sleep_tweets_counts$n_tweets.complaints)] <- 0
+
+sleep_tweets_counts_melt <- reshape2::melt(sleep_tweets_counts, id.vars="Local_minute")
+
+plot_df <- sleep_tweets_counts_melt %>%
+        group_by(variable) %>%
+        mutate(std.value=scale(value)) %>%
+        ungroup()
+
+ggplot() +
+  geom_rect(data = time_rects, aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax), fill = "grey", alpha = 0.6) +
+  geom_smooth(data = plot_df, aes(Local_minute, std.value, color=variable, fill=variable)) +
+  scale_x_datetime(breaks = date_breaks("12 hours"), labels = date_format("%m/%d %H:00")) +
+  theme_bw() +
+  xlab("Date and time") +
+  ylab("Standardized minute-by-minute tweet count") +
+  ggtitle("Standardized distribution of all tweets versus tweets reporting sleep complaints", subtitle = "Dashed line represents change to Standard Time. Shaded areas represent night time (7pm-7am).") +
+  geom_vline(xintercept = ymd_hms("2019-11-03 02:00:00"), lty="dashed", color="darkred") +
+  scale_y_continuous(breaks = seq(-0.75,0.75, by=0.25)) +
+  scale_color_brewer(palette = "Set1") +
+  scale_fill_brewer(palette = "Set1") 
+
+
+```
+
+As expected, in most nights, the standardized number of tweets reporting sleep complaints tends to be higher than the standardized number of all tweets, suggesting that sleep complaints tend to be reported at night time.
+
+
+#### Geographic distribution of tweets reporting sleep complaints
+
+To understand the geographic distribution, as well as the impact of latitude and longitude in the distribution of tweets mentioning sleep complaints before and after the change from DST to ST, maps of the United States plotting these tweets are shown below.
+
+
+```{r fig.height=5, fig.width=12, message=FALSE, warning=FALSE}
+
+states <- map_data("state")
+
+ggplot() + 
+        geom_polygon(data = states, aes(x = long, y = lat, group = group), fill = NA, color = "black") + 
+        coord_fixed(1.3) +
+        guides(fill=FALSE) +
+        geom_sf(data=filter(sleep_tweets, HasComplaints==1, !is.na(state_name)), color="blue", size=0.5) +
+        theme_minimal() +
+  ggtitle("Individual coordinates of tweets reporting sleep complaints") +
+  xlab("") +
+  ylab("") +
+  facet_wrap(. ~ DST_ST)
+```
+
+By looking at the geographic distribution of sleep complaint tweets before and after the change, there are no noticeable patterns. However, by calculating state level prevalence of tweets sleep complaints it is possible to identify more visible patterns, as demonstrated by the figure below.
+
+```{r fig.height=5, fig.width=12, message=FALSE, warning=FALSE}
+
+plot_df <- sleep_tweets %>%
+  as.data.frame() %>%
+  select(-geometry) %>%
+  group_by(DST_ST, STATE) %>%
+  summarise(n.tweets.all=n(),
+            n.tweets.complaints=sum(HasComplaints==1),
+            prop.tweets=n.tweets.complaints/n.tweets.all,
+            state_name=state_name[1]) %>%
+  filter(!is.na(state_name))
+
+
+states <- st_as_sf(maps::map("state", plot = FALSE, fill = TRUE))
+states <- cbind(states, st_coordinates(st_centroid(states)))
+
+states$ID <- toTitleCase(states$ID)
+
+plot_df <- left_join(states, plot_df, by = c("ID"="state_name"))
+
+
+plot_df <- plot_df %>%
+  filter(!is.na(DST_ST))
+
+my_theme <- function() {
+  theme_minimal() +                                  
+  theme(axis.line = element_blank(),                 
+        axis.text = element_blank(),                 
+        axis.title = element_blank(),
+        panel.grid = element_line(color = "white"),  
+        legend.key.size = unit(0.8, "cm"),          
+        legend.text = element_text(size = 16),       
+        legend.title = element_text(size = 16),
+        plot.title = element_text(size = 22))      
+}
+
+myPalette <- colorRampPalette(brewer.pal(9, "OrRd"))
+
+
+
+prev_min <- min(plot_df$prop.tweets, na.rm = T)*100 # get min considering data from 2004 and 2014
+prev_max <- max(plot_df$prop.tweets, na.rm = T)*100
+
+# Replace "..." with your code
+ggplot() +
+  geom_sf(data = plot_df, aes(fill=prop.tweets*100), lwd = 0) +
+  ggtitle("State level prevalence of tweets reporting sleep complaints") +
+  scale_fill_gradientn(name = "Tweets reporting\nsleep complaints (%)", colours = myPalette(100),
+                       limit = range(prev_min, prev_max)) +
+  facet_wrap(. ~ DST_ST) +
+  theme_minimal()
+
+```
+
+It is possible to observe the the majority of states had an increased prevalence of tweets reporting sleep complaints after the change from DST to ST. It is likely that this effect is related to the differences in light exposure and adaptation to a new time. Whether these changes are also reported after the change from ST to DST remains to be determined.

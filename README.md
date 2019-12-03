@@ -18,7 +18,7 @@ DUE DATE FOR FINAL VERSION: 12/13/19 11:59PM. This is a hard deadline. Turn in w
 Author: Diego R. Mazzotti, Ph.D.
 Final Project for Data Science for Biomedical Informatics BMIN503/EPID600
 
-This study will extract data from Twitter to identify tweets mentioning sleep complaints. We will use the results of a simple machine learning classifier, using manually annotated tweets according to their status of whether the tweet reports a sleep complaint, to classify geotagged tweets posted in the United States. We will then calculate the prevalence of sleep complaints in different geographic regions, including at different latitudes and distances from time zone boundaries to evaluate whether these factors are associated with differences in prevalence of sleep complaints.
+This study extracted data from Twitter to identify tweets mentioning sleep complaints at the time of posting. Using the results of a simple machine learning classifier, based on manual annotation of tweets according to their status of whether the tweet reports a sleep complaint at the time of posting, this study classified geotagged tweets posted in the United States. Then, the prevalence of sleep complaints in different geographic regions and the number of tweets posted at different times of the day were investigated. Comparisons of the the number of tweets before and after the change from daylight savings time to standard time were also evaluated in this project.
 
 #### Available files
 
